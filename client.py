@@ -1,7 +1,9 @@
 import PySimpleGUI as sg
 import socket
 import threading
+import warnings
 
+warnings.filterwarnings("ignore")
 sg.theme("DarkTeal5")
 sg.set_options(font=("Helvetica", 13))
 layout = [
@@ -53,18 +55,21 @@ def connect_to_server(name):
 
 
 def receive_message_from_server(sck):
-    while True:
-        from_server = sck.recv(4096).decode()
+    try:
+        while True:
+            from_server = sck.recv(4096).decode()
 
-        if not from_server:
-            break
+            if not from_server:
+                break
 
-        if '->' in from_server:
-            from_server = from_server.replace('->', ' -> ')
+            if '->' in from_server:
+                from_server = from_server.replace('->', ' -> ')
 
-        msgs.append(from_server)
-        text = "\n".join(msgs)
-        window["-DISPLAY-"].update(f'{text}\n')
+            msgs.append(from_server)
+            text = "\n".join(msgs)
+            window["-DISPLAY-"].update(f'{text}\n')
+    except OSError:
+        exit()
 
     sck.close()
     window.close()
@@ -78,6 +83,9 @@ while True:
     elif event == "-CONNECT-":
         connect()
     elif event == "-STOP1-":
+        if client:
+            client.close()
+        window.close()
         exit()
     elif event == "-SEND-":
         msg = values["-MESSAGE-"].replace('\n', '')

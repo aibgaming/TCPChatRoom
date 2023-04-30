@@ -1,7 +1,9 @@
 import PySimpleGUI as sg
 import socket
 import threading
+import warnings
 
+warnings.filterwarnings("ignore")
 sg.theme("DarkTeal5")
 sg.set_options(font=("Helvetica", 13))
 layout = [[sg.Button("Connect", key="-CONNECT-", size=(30, 1)),
@@ -32,7 +34,7 @@ def start_server():
     server.bind((HOST_ADDR, HOST_PORT))
     server.listen(5)
 
-    thread = threading.Thread(target=accept_clients, args=(server, " "))
+    thread = threading.Thread(target=accept_clients, args=(server, ))
     thread.start()
 
     window["-HOST-"].update("Host: " + HOST_ADDR)
@@ -56,20 +58,22 @@ def stop_server():
     exit()
 
 
-def accept_clients(the_server, y):
+def accept_clients(the_server):
     global clients, window
-    while True:
-        client, addr = the_server.accept()
-        clients.append(client)
+    try:
+        while True:
+            client, addr = the_server.accept()
+            clients.append(client)
 
-        thread = threading.Thread(target=send_receive_client_message,
-                                  args=(client, addr))
-        thread.start()
+            thread = threading.Thread(target=send_receive_client_message,
+                                      args=(client, ))
+            thread.start()
+    except ConnectionAbortedError:
+        exit()
 
 
-def send_receive_client_message(client_connection, client_ip_addr):
+def send_receive_client_message(client_connection):
     global server, client_name, clients, clients_names, window
-    client_msg = " "
 
     client_name = client_connection.recv(4096).decode()
     welcome_msg = "Welcome " + client_name + "! Press stop to quit." + ('\n' if len(clients_names) == 0 else '')
@@ -82,8 +86,9 @@ def send_receive_client_message(client_connection, client_ip_addr):
             allclients_msg = '\n'+' & '.join(clients_names)
             allclients_msg = allclients_msg + ' are in this chat.\n'
         else:
-            allclients_msg = '\n'+', '.join(clients_names[:len(clients_names) - 2])
-            allclients_msg = allclients_msg + '& ' + \
+            allclients_msg = '\n' + ', '.join(
+                clients_names[:len(clients_names) - 1])
+            allclients_msg = allclients_msg + ' & ' + \
                              clients_names[len(clients_names) - 1] + \
                              ' are in this chat.\n'
 
@@ -98,27 +103,36 @@ def send_receive_client_message(client_connection, client_ip_addr):
             server_msg = client_name + ' has joined the chat!'
             client.send(server_msg.encode())
 
-    while True:
-        data = client_connection.recv(4096).decode()
+    try:
+        while True:
+            data = client_connection.recv(4096).decode()
 
-        if not data:
-            break
+            if not data:
+                break
 
-        client_msg = data
+            client_msg = data
 
-        idx = get_client_index(clients, client_connection)
-        sending_client_name = clients_names[idx]
+            idx = get_client_index(clients, client_connection)
+            sending_client_name = clients_names[idx]
 
-        for c in clients:
-            if c != client_connection:
-                server_msg = str(sending_client_name + "->" + client_msg)
-                c.send(server_msg.encode())
+            for c in clients:
+                if c != client_connection:
+                    server_msg = str(sending_client_name + "->" + client_msg)
+                    c.send(server_msg.encode())
+    except OSError:
+        exit()
 
     idx = get_client_index(clients, client_connection)
+
+    leaving_msg = clients_names[idx] + ' has left the chat!'
+
     del clients_names[idx]
     del clients[idx]
-    server_msg = "BYE!"
-    client_connection.send(server_msg.encode())
+
+    for client in clients:
+        server_msg = leaving_msg
+        client.send(server_msg.encode())
+
     client_connection.close()
 
     update_client_names_display(clients_names)
