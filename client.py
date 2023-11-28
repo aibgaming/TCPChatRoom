@@ -4,8 +4,16 @@ import threading
 import warnings
 
 warnings.filterwarnings("ignore")
+
 sg.theme("DarkTeal5")
 sg.set_options(font=("Helvetica", 13))
+
+HOST_ADDR = "127.0.0.1"
+HOST_PORT = 8080
+MAX_BUFFER_SIZE = 4096
+
+msgs = []
+
 layout = [
     [sg.Text("Name:"), sg.InputText(key="-NAME-", size=(30, 1)),
      sg.Button("Connect", key="-CONNECT-", size=(15, 1)),
@@ -20,10 +28,6 @@ window = sg.Window("Client", layout, size=(600, 425))
 
 username = ""
 client = None
-HOST_ADDR = "127.0.0.1"
-HOST_PORT = 8080
-msgs = []
-
 
 def connect():
     global username, client
@@ -32,7 +36,6 @@ def connect():
     else:
         username = values["-NAME-"]
         connect_to_server(username)
-
 
 def connect_to_server(name):
     global client, HOST_PORT, HOST_ADDR
@@ -48,6 +51,13 @@ def connect_to_server(name):
         thread = threading.Thread(target=receive_message_from_server,
                                   args=(client,))
         thread.start()
+
+        # Update the display after connecting
+        msgs.append(f'Connected as: {name}')
+        text = "\n".join(msgs)
+        window["-DISPLAY-"].update(disabled=False)
+        # window["-DISPLAY-"].update(f'{text}\n')
+
     except Exception as e:
         sg.popup_error(
             "Cannot connect to host: " + HOST_ADDR + " on port: " + str(
@@ -57,7 +67,7 @@ def connect_to_server(name):
 def receive_message_from_server(sck):
     try:
         while True:
-            from_server = sck.recv(4096).decode()
+            from_server = sck.recv(MAX_BUFFER_SIZE).decode()
 
             if not from_server:
                 break
@@ -73,7 +83,6 @@ def receive_message_from_server(sck):
 
     sck.close()
     window.close()
-
 
 while True:
     event, values = window.read()
